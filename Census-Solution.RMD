@@ -1,0 +1,422 @@
+---
+title: "Group Assigment of Machine Learning - Group 8 (Census.csv)"
+author: "Anurag Kedia, Saurav Suman, Neha Tiwary, Divya Thomas, Peehu"
+date: "10/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#### Read the Dataset and replace the missing values with NA
+```{r}
+census = read.csv(file.choose(), na.strings = c(""," ","?",NA))
+
+```
+
+#### 1. How to tackle missing values? Should these be tackled at all? 
+
+```{r}
+sapply(census,function(x){sum(is.na(x))})
+
+str(census)
+```
+
+### Check for the missing values and plot it.
+
+```{r}
+
+#install.packages("naniar")
+
+```
+
+```{r}
+library(naniar)
+vis_miss(census)
+```
+
+#### 2. Is there any need to normalize data?
+
+#### Summary of the dataset
+```{r}
+library(caret)
+library(mlr)
+summarizeColumns(census)
+
+```
+
+Models which use distance calculation methodology to find the decision boundary for various classes, normalization is suggested and recommended like k nearest neighbors, NN. It is not mandatory for all models to use normalization.
+
+
+
+#### 3. What can be said about class imbalance?
+      Checking the imbalance in the dataset
+```{r}
+
+prop.table(table(census$income))
+
+```
+There is a imbalance in the dataset but the imbalance is not that big so that we have to do some preventive measures to remove the imbalance. If the data is having 80:20 ratio of imbalance then no process required.
+
+
+#### Barplot to see data distribution among them
+```{r}
+
+plot(census$income, col = "pink", main = "Target variable dataset for income", xlab = "Income", ylab=" Count")
+
+```
+
+#### EDA of the dataset
+
+####  Hours per Week
+```{r}
+
+ggplot(census, aes(x = income, y = hours.per.week)) + geom_boxplot()
+ 
+```
+
+#### Capital gain & Capital loss
+```{r}
+ggplot(census, aes(x = income, y = capital.gain)) + geom_boxplot()
+ggplot(census, aes(x = income, y = capital.loss)) + geom_boxplot()
+```
+
+#### Corr Plot
+```{r}
+library(corrplot)
+library(dplyr)
+census.cor=select_if(census, is.numeric)
+cor=cor(census.cor)
+
+corrplot(cor, type="lower")
+```
+
+
+#### Impute the missing values
+```{r}
+imp = impute(census, classes = list(factor = imputeMode(), integer = imputeMean()), dummy.classes = c("integer","factor"), dummy.type = "factor")
+
+
+total = imp$data
+sapply(total,function(x){sum(is.na(x))})
+total$workclass.dummy = NULL
+total$occupation.dummy = NULL
+total$native.country.dummy = NULL
+subset(total, native.country=='Holand-Netherlands')
+data_clean <- total[-c(35891),]
+
+```
+
+native.country=='Holand-Netherlands' has been treated because it was causing imbalance in train and test dataset as it was a single record in the dataset.
+
+
+
+
+#### Split the dataset in 70:30 ratio (Train and Test data)
+```{r}
+str(data_clean)
+subset(data_clean, native.country=='Holand-Netherlands')
+nrow(data_clean)
+nrow(total)
+library(caTools)
+set.seed(144)
+spl = sample.split(data_clean$income, SplitRatio = 0.7)
+train = subset(data_clean, spl == TRUE)
+test = subset(data_clean, spl == FALSE)
+
+```
+
+#### Check the summary of the train and test data and check if there is any missing values
+```{r}
+summarizeColumns(train)
+summarizeColumns(test)
+sapply(total,function(x){sum(is.na(x))})
+
+```
+
+
+#### Create Task for building the model.
+```{r}
+trainTask = makeClassifTask(data = train,target = "income", positive = ">50K")
+testTask = makeClassifTask(data = test, target = "income", positive = ">50K")
+
+trainTask
+
+```
+
+#### Building Naive Bayes Model
+```{r}
+
+nb.learner=makeLearner("classif.naiveBayes",predict.type="response")
+nb.model=train(nb.learner,trainTask)
+nb.predict=predict(nb.model,testTask)
+
+confusionMatrix(nb.predict$data$truth,nb.predict$data$response, positive = ">50K")
+
+```
+
+#### Building LDA Model
+```{r}
+
+lda.learner = makeLearner("classif.lda", predict.type = "response")
+lda.model = train(lda.learner, trainTask)
+lda.predict = predict(lda.model, testTask)
+confusionMatrix(lda.predict$data$truth,lda.predict$data$response, positive = ">50K")
+
+```
+
+#### Building Logistic Regression Model
+```{r}
+
+logistic.learner=makeLearner("classif.logreg", predict.type = "response")
+logistic.model=train(logistic.learner, trainTask)
+logistic.predict= predict(logistic.model, testTask)
+confusionMatrix(logistic.predict$data$truth, logistic.predict$data$response, positive = ">50K")
+
+```
+
+#### Building CART Model
+```{r}
+
+cart.learner=makeLearner("classif.rpart", predict.type = "response")
+cart.model=train(cart.learner, trainTask)
+cart.predict= predict(cart.model, testTask)
+confusionMatrix(cart.predict$data$truth, cart.predict$data$response, positive = ">50K")
+
+```
+
+#### Building RandomForest Model
+```{r}
+
+rf.learner=makeLearner("classif.randomForest", predict.type = "response")
+rf.model=train(rf.learner, trainTask)
+rf.predict= predict(rf.model, testTask)
+confusionMatrix(rf.predict$data$truth, rf.predict$data$response, positive = ">50K")
+
+```
+
+#### Building SVM Model
+```{r}
+
+svm.learner=makeLearner("classif.ksvm", predict.type = "response")
+svm.model=train(svm.learner, trainTask)
+svm.predict= predict(svm.model, testTask)
+confusionMatrix(svm.predict$data$truth, svm.predict$data$response, positive = ">50K")
+
+```
+
+#### Building GBM Model
+```{r}
+
+gbm.learner=makeLearner("classif.gbm", predict.type = "response")
+gbm.model=train(gbm.learner, trainTask)
+gbm.predict= predict(gbm.model, testTask)
+confusionMatrix(gbm.predict$data$truth, gbm.predict$data$response, positive = ">50K")
+
+```
+
+#### Incorporating Cross Validation
+```{r}
+
+cv.logistic = crossval(learner = logistic.learner,task = trainTask,iters = 10,stratify = TRUE,
+                       measures = acc,show.info = T)
+
+#Getting the accuracy
+
+cv.logistic$aggr
+cv.logistic$measures.test
+
+```
+
+#### 5. How to determine the tuning parameters?
+
+#### Tuning CART model with Cross Validation
+```{r}
+
+## List of available parameters to tune
+
+getParamSet(cart.learner)
+
+
+## Set Resampling Strategy
+
+set_cv = makeResampleDesc("CV",iters = 10L)
+
+#Search for hyperparameters
+gs = makeParamSet(
+  makeIntegerParam("minsplit",lower = 10, upper = 50),
+  makeIntegerParam("minbucket", lower = 5, upper = 50),
+  makeNumericParam("cp", lower = 0.001, upper = 0.2)
+)
+
+gscontrol = makeTuneControlGrid()
+
+#Tuning Process
+
+stune = tuneParams(learner = cart.learner, resampling = set_cv, task = trainTask, par.set = gs, control = gscontrol, measures = acc)
+
+stune$x
+stune$y
+
+tuned.learner = setHyperPars(cart.learner, par.vals = stune$x)
+tuned.rpartModel = train(tuned.learner, trainTask)
+
+
+```
+
+#### Predict using the tuned CART model
+```{r}
+
+cart.tunedpredict = predict(tuned.rpartModel, testTask)
+confusionMatrix(cart.tunedpredict$data$truth, cart.tunedpredict$data$response, positive = ">50K")
+
+```
+
+#### Tune RandomForest 
+```{r}
+
+getParamSet("classif.randomForest")
+
+## Tuining of parameters
+
+rf_param = makeParamSet(
+  makeIntegerParam("ntree",lower = 50, upper = 200),
+  makeIntegerParam("mtry", lower = 3, upper = 10),
+  makeIntegerParam("nodesize", lower = 10, upper = 50)
+)
+
+
+rancontrol = makeTuneControlRandom(maxit = 10L)
+set_cv = makeResampleDesc("CV",iters = 3L)
+tuned.rf = tuneParams(learner = rf.learner, resampling = set_cv, task = trainTask, par.set = rf_param, control = rancontrol, measures = acc)
+
+tuned.rfLearner = setHyperPars(rf.learner, par.vals = tuned.rf$x)
+tuned.rfModel = train(tuned.rfLearner, trainTask)
+tuned.rfPredict = predict(tuned.rfModel, testTask)
+
+
+confusionMatrix(tuned.rfPredict$data$truth, tuned.rfPredict$data$response, positive = ">50K")
+
+
+```
+
+
+#### Tune SVM Model
+```{r}
+#load svm
+getParamSet("classif.ksvm") 
+
+
+#Set parameters
+pssvm = makeParamSet(
+  makeDiscreteParam("C", values = 2^c(-8,-4,-2,0)), #cost parameters
+  makeDiscreteParam("sigma", values = 2^c(-8,-4,0,4)) #RBF Kernel Parameter
+)
+
+#specify search function
+ctrl = makeTuneControlGrid()
+
+#tune model
+svm.tuned = tuneParams(svm.learner, task = trainTask, resampling = set_cv, par.set = pssvm, control = ctrl,measures = acc)
+
+#CV accuracy
+svm.tuned$x
+
+
+#set the model with best params
+tuned.SVMLearner = setHyperPars(svm.learner, par.vals = svm.tuned$x)
+
+#train
+tuned.svm = train(tuned.SVMLearner, trainTask)
+
+#test
+tuned.SVMPredict = predict(tuned.svm, testTask)
+
+confusionMatrix(tuned.SVMPredict$data$truth, tuned.SVMPredict$data$response, positive = ">50K")
+
+```
+
+#### Tuning GBM Model
+```{r}
+#load GBM
+getParamSet("classif.gbm")
+
+
+#specify tuning method
+rancontrol = makeTuneControlRandom(maxit = 10L)
+
+#3 fold cross validation
+set_cv = makeResampleDesc("CV",iters = 3L)
+
+#parameters
+gbm_par = makeParamSet(
+  makeDiscreteParam("distribution", values = "bernoulli"),
+  makeIntegerParam("n.trees", lower = 100, upper = 200), #number of trees
+  makeIntegerParam("interaction.depth", lower = 2, upper = 5), #depth of tree
+  makeIntegerParam("n.minobsinnode", lower = 10, upper = 40),
+  makeNumericParam("shrinkage",lower = 0.01, upper = 1)
+)
+
+tune_gbm = tuneParams(learner = gbm.learner, task = trainTask,resampling = set_cv,measures = acc,par.set = gbm_par,control = rancontrol)
+
+#check CV accuracy
+tune_gbm$y
+
+#set parameters
+final_gbm = setHyperPars(learner = gbm.learner, par.vals = tune_gbm$x)
+
+#train
+to.gbm = train(final_gbm, trainTask)
+
+#test 
+pr.gbm = predict(to.gbm, testTask)
+
+confusionMatrix(pr.gbm$data$truth,pr.gbm$data$response, positive = ">50K")
+
+```
+
+
+#### ROC and AUC - Only for 2 Algorithms ( Logistic regression and SVM )
+```{r}
+
+library(mlr)
+logistic.learner2= makeLearner("classif.logreg", predict.type="prob")
+logistic.model2=train(logistic.learner2,trainTask)
+logistic.predict2=predict(logistic.model2,testTask, type="prob")
+df = generateThreshVsPerfData(logistic.predict2, measures = list(fpr, tpr, mmce))
+plotROCCurves(df)
+performance(logistic.predict2,auc)
+plotThreshVsPerf(df)
+
+
+svm.learner2= makeLearner("classif.ksvm", predict.type = "prob")
+svm.model2=train(svm.learner2, trainTask)
+svm.predict2=predict(svm.model2, testTask)
+df2 = generateThreshVsPerfData(svm.predict2, measures = list(fpr, tpr, mmce))
+plotROCCurves(df2)
+performance(svm.predict2,auc)
+plotThreshVsPerf(df2)
+
+```
+
+4. Which machine learning algorithm works the best without tuning?
+
+#### SVM model works best with high accuracy of 89.2% . So using tuned SVM model to predict whether the person earns more than 50K or not
+
+```{r}
+
+RealtestTask = makeClassifTask(data = data_clean, target = "income", positive = ">50K")
+
+realsvm.predict = predict(svm.model, RealtestTask)
+
+
+submitTest=data_clean
+submitTest$predictedVal=realsvm.predict$data$response
+
+
+  write.csv(submitTest,"Final_value.csv")
+
+```
+
